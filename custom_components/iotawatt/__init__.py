@@ -79,33 +79,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
-    """Unload a config entry."""
-    unload_ok = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(entry, component)
-                for component in PLATFORMS
-            ]
-        )
-    )
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-
-    return unload_ok
-
-
-async def cleanup_device_registry(hass: HomeAssistant, device_id):
-    """Remove device registry entry if there are no remaining entities."""
-
-    device_registry = await hass.helpers.device_registry.async_get_registry()
-    entity_registry = await hass.helpers.entity_registry.async_get_registry()
-    if device_id and not hass.helpers.entity_registry.async_entries_for_device(
-        entity_registry, device_id, include_disabled_entities=True
-    ):
-        device_registry.async_remove_device(device_id)
-
-
 class IotawattUpdater(DataUpdateCoordinator):
     """Class to manage fetching update data from the IoTaWatt Energy Device"""
 
@@ -166,31 +139,3 @@ class IotaWattEntity(CoordinatorEntity):
     def icon(self):
         """Return the icon for the entity."""
         return self._icon
-
-    async def async_added_to_hass(self):
-        """When entity is added to HASS."""
-        self.async_on_remove(self.coordinator.async_add_listener(self._update_callback))
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Call when entity will be removed from hass."""
-        self._remove_signal_update()
-
-    @callback
-    def _update_callback(self):
-        """Handle device update."""
-        self.async_write_ha_state()
-
-    async def _delete_callback(self, device_id):
-        """Remove the device when it disappears."""
-
-        if device_id == self._unique_id:
-            entity_registry = (
-                await self.hass.helpers.entity_registry.async_get_registry()
-            )
-
-            if entity_registry.async_is_registered(self.entity_id):
-                entity_entry = entity_registry.async_get(self.entity_id)
-                entity_registry.async_remove(self.entity_id)
-                await cleanup_device_registry(self.hass, entity_entry.device_id)
-            else:
-                await self.async_remove()
