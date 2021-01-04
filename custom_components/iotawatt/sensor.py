@@ -53,25 +53,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         entities=[entity]
         async_add_entities(entities)
 
-    async def async_delete_entities(sensor_info):
-        """Remove an entity."""
-        sensor_info = "sensor.iotawatt_" + sensor_info
-        entity_id = sensor_info.lower()
-
-        platform = "sensor"
-        _LOGGER.debug("Sensors: %s", coordinator.data["sensors"])
-        #unique_id = coordinator.data["sensors"][sensor_info].getSensorID()
-
-        entity_reg = await hass.helpers.entity_registry.async_get_registry()
-        _LOGGER.debug("ID: %s", entity_id)
-        entity_check = entity_reg.async_is_registered(entity_id)
-        _LOGGER.debug("Ent: %s", entity_id)
-        if entity_check:
-            _LOGGER.debug("Removing entity: %s", entity_id)
-            entity_reg.async_remove(entity_id)
-
     async_dispatcher_connect(hass, SIGNAL_ADD_DEVICE, async_new_entities)
-    async_dispatcher_connect(hass, SIGNAL_DELETE_DEVICE, async_delete_entities)
 
 
 class IotaWattSensor(IotaWattEntity):

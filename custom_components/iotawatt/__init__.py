@@ -136,17 +136,6 @@ class IotawattUpdater(DataUpdateCoordinator):
                 async_dispatcher_send(self.hass, SIGNAL_ADD_DEVICE, to_add)
                 self.sensorlist[sensor] = sensors["sensors"][sensor]
 
-        keys_to_be_removed = []
-        for known_sensor in self.sensorlist:
-            if known_sensor not in sensors["sensors"]:
-                async_dispatcher_send(
-                    self.hass, SIGNAL_DELETE_DEVICE, known_sensor
-                )
-                keys_to_be_removed.append(known_sensor)
-
-        for k in keys_to_be_removed:
-            del self.sensorlist[k]
-
         return sensors
 
 class IotaWattEntity(CoordinatorEntity):
