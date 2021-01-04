@@ -1,4 +1,6 @@
 """Config flow for iotawatt integration."""
+import httpx
+import json
 import logging
 
 from httpx import AsyncClient
@@ -6,18 +8,16 @@ from iotawattpy.iotawatt import Iotawatt
 import voluptuous as vol
 
 from homeassistant import config_entries, core, exceptions
-from homeassistant.const import CONF_NAME, CONF_IP_ADDRESS, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_NAME, CONF_HOST, CONF_USERNAME, CONF_PASSWORD
 
-from .const import DOMAIN  # pylint:disable=unused-import
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): str,
-        vol.Required(CONF_IP_ADDRESS): str,
-        vol.Optional(CONF_USERNAME, default=""): str,
-        vol.Optional(CONF_PASSWORD, default=""): str,
+        vol.Required(CONF_HOST): str,
     }
 )
 
@@ -44,18 +44,16 @@ async def validate_input(hass: core.HomeAssistant, data):
     """
     session = AsyncClient()
     iotawatt = Iotawatt(
-        data["name"], data["ip_address"], session, data["username"], data["password"]
+        data["name"], data["host"], session
     )
-    is_connected = await iotawatt.connect()
-    _LOGGER.debug("isConnected: %s", is_connected)
-
-    if not is_connected:
+    try:
+        is_connected = await iotawatt.connect()
+        _LOGGER.debug("isConnected: %s", is_connected)
+    except (KeyError, json.JSONDecodeError, httpx.HTTPError):
         raise CannotConnect
 
-    # If you cannot connect:
-    # throw CannotConnect
-    # If the authentication is wrong:
-    # InvalidAuth
+    if not is_connected:
+        raise InvalidAuth
 
     # Return info that you want to store in the config entry.
     return {"title": data["name"]}
@@ -65,7 +63,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for iotawatt."""
 
     VERSION = 1
-    # CONNECTION_CLASS = config_entries.CONN_CLASS_UNKNOWN
+    CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
+
+    def __init__(self):
+        """Initialize."""
+        self._data = {}
+        self._errors = {}
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -75,13 +78,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         errors = {}
+        self._data.update(user_input)
 
         try:
             info = await validate_input(self.hass, user_input)
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
-            errors["base"] = "invalid_auth"
+            return await self.async_step_auth()
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
@@ -91,6 +95,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
+
+    async def async_step_auth(self, user_input=None):
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str,
+            }
+        )
+
+        if user_input is None:
+            _LOGGER.debug("fdsfsf")
+            return self.async_show_form(
+                step_id="auth", data_schema=data_schema
+            )
+        self._data.update(user_input)
+        return self.async_create_entry(title="title", data=self._data)
 
 
 class CannotConnect(exceptions.HomeAssistantError):

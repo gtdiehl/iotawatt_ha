@@ -9,12 +9,16 @@
             "unknown": "Unexpected error"
         },
         "step": {
-            "user": {
+            "auth": {
                 "data": {
-                    "ip_address": "IP Address",
-                    "name": "Name",
                     "password": "Password",
                     "username": "Username"
+                }
+            },
+            "user": {
+                "data": {
+                    "host": "Host",
+                    "name": "Name"
                 }
             }
         }

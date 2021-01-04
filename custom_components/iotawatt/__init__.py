@@ -47,7 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     session = AsyncClient()
     api = Iotawatt(
         entry.data["name"],
-        entry.data["ip_address"],
+        entry.data["host"],
         session,
         entry.data["username"],
         entry.data["password"],
