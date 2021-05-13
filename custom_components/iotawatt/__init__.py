@@ -45,13 +45,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     polling_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
     session = AsyncClient()
-    api = Iotawatt(
-        entry.data["name"],
-        entry.data["host"],
-        session,
-        entry.data["username"],
-        entry.data["password"],
-    )
+    if "username" in entry.data.keys():
+        api = Iotawatt(
+            entry.data["name"],
+            entry.data["host"],
+            session,
+            entry.data["username"],
+            entry.data["password"],
+        )
+    else:
+        api = Iotawatt(
+            entry.data["name"],
+            entry.data["host"],
+            session,
+        )  
 
     coordinator = IotawattUpdater(
         hass,
