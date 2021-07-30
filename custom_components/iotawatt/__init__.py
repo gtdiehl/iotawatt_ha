@@ -9,7 +9,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.const import CONF_SCAN_INTERVAL, DEVICE_CLASS_ENERGY
+from homeassistant.const import CONF_SCAN_INTERVAL
 from homeassistant.exceptions import ConfigEntryNotReady, PlatformNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import (
@@ -58,7 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             entry.data["name"],
             entry.data["host"],
             session,
-        )  
+        )
 
     coordinator = IotawattUpdater(
         hass,
@@ -120,8 +120,6 @@ class IotawattUpdater(DataUpdateCoordinator):
 
 class IotaWattEntity(CoordinatorEntity):
     """Defines the base IoTaWatt Energy Device entity."""
-
-    device_class = DEVICE_CLASS_ENERGY
 
     def __init__(self, coordinator: IotawattUpdater, entity, mac_address, name):
         """Initialize the IoTaWatt Entity."""

@@ -3,7 +3,13 @@ from datetime import timedelta
 from functools import partial
 import logging
 
-from homeassistant.const import POWER_WATT, VOLT
+from homeassistant.const import (
+    POWER_WATT,
+    ELECTRIC_POTENTIAL_VOLT,
+    DEVICE_CLASS_POWER,
+    DEVICE_CLASS_VOLTAGE
+)
+
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
@@ -71,6 +77,16 @@ class IotaWattSensor(IotaWattEntity):
         self._io_type = self.coordinator.data["sensors"][self._ent].getType()
         self._state = None
 
+        unit = self.coordinator.data["sensors"][self._ent].getUnit()
+        if unit == "Watts":
+            self._attr_unit_of_measurement = POWER_WATT
+            self._attr_device_class = DEVICE_CLASS_POWER
+        elif unit == "Volts":
+            self._attr_unit_of_measurement = ELECTRIC_POTENTIAL_VOLT
+            self._attr_device_class = DEVICE_CLASS_VOLTAGE
+        else:
+            self._attr_unit_of_measurement = unit
+
     @property
     def device_state_attributes(self):
         """Return the state attributes of the device."""
@@ -80,16 +96,6 @@ class IotaWattSensor(IotaWattEntity):
             channel = "N/A"
 
         return {"Type": self._io_type, "Channel": channel}
-
-    @property
-    def unit_of_measurement(self):
-        """Return the unit of measurement of this entity, if any."""
-        unit = self.coordinator.data["sensors"][self._ent].getUnit()
-        if unit == "Watts":
-            return POWER_WATT
-        if unit == "Volts":
-            return VOLT
-        return self.coordinator.data["sensors"][self._ent].getUnit()
 
     @property
     def state(self):
