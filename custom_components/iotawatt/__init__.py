@@ -7,9 +7,10 @@ from httpx import AsyncClient
 from iotawattpy.iotawatt import Iotawatt
 import voluptuous as vol
 
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import CONF_SCAN_INTERVAL
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady, PlatformNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import (
@@ -118,7 +119,7 @@ class IotawattUpdater(DataUpdateCoordinator):
 
         return sensors
 
-class IotaWattEntity(CoordinatorEntity):
+class IotaWattEntity(CoordinatorEntity, SensorEntity):
     """Defines the base IoTaWatt Energy Device entity."""
 
     def __init__(self, coordinator: IotawattUpdater, entity, mac_address, name):

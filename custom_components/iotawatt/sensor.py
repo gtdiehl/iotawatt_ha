@@ -1,16 +1,21 @@
 """Support for IoTaWatt Energy monitor."""
-from datetime import timedelta
+from datetime import timedelta, datetime
 from functools import partial
 import logging
 
 from homeassistant.const import (
     POWER_WATT,
+    ENERGY_WATT_HOUR,
     ELECTRIC_POTENTIAL_VOLT,
     DEVICE_CLASS_POWER,
+    DEVICE_CLASS_ENERGY,
     DEVICE_CLASS_VOLTAGE
 )
 
 from homeassistant.core import callback
+from homeassistant.components.sensor import (
+    STATE_CLASS_MEASUREMENT,
+)
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -19,6 +24,7 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
+from homeassistant.util import dt
 
 from . import IotaWattEntity, IotawattUpdater
 from .const import (
@@ -72,20 +78,26 @@ class IotaWattSensor(IotaWattEntity):
             coordinator=coordinator, entity=entity, mac_address=mac_address, name=name
         )
 
+        sensor = self.coordinator.data["sensors"][entity]
         self._ent = entity
         self._name = name
-        self._io_type = self.coordinator.data["sensors"][self._ent].getType()
+        self._io_type = sensor.getType()
         self._state = None
+        self._attr_state_class = STATE_CLASS_MEASUREMENT
 
-        unit = self.coordinator.data["sensors"][self._ent].getUnit()
+        unit = sensor.getUnit()
         if unit == "Watts":
             self._attr_unit_of_measurement = POWER_WATT
             self._attr_device_class = DEVICE_CLASS_POWER
+        if unit == "WattHours":
+            self._attr_unit_of_measurement = ENERGY_WATT_HOUR
+            self._attr_device_class = DEVICE_CLASS_ENERGY
         elif unit == "Volts":
             self._attr_unit_of_measurement = ELECTRIC_POTENTIAL_VOLT
             self._attr_device_class = DEVICE_CLASS_VOLTAGE
         else:
             self._attr_unit_of_measurement = unit
+
 
     @property
     def device_state_attributes(self):
@@ -95,12 +107,27 @@ class IotaWattSensor(IotaWattEntity):
         else:
             channel = "N/A"
 
-        return {"Type": self._io_type, "Channel": channel}
+        attrs = {
+                "type": self._io_type,
+                "channel": channel
+            }
+
+        if last_reset := self.last_reset:
+            attrs["last_reset"] = last_reset.isoformat()
+        return attrs
 
     @property
     def state(self):
         """Return the state of the sensor."""
         return self.coordinator.data["sensors"][self._ent].getValue()
+
+    @property
+    def last_reset(self):
+        """Return the time when the sensor was last reset, if any."""
+        last_reset = self.coordinator.data["sensors"][self._ent].getBegin()
+        if last_reset is None:
+            return None
+        return dt.parse_datetime(last_reset)
 
     @property
     def name(self):
