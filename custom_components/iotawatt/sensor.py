@@ -3,8 +3,12 @@ from datetime import timedelta
 from functools import partial
 import logging
 
+from homeassistant.const import POWER_WATT, VOLT
 from homeassistant.core import callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -45,12 +49,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         name = sensor_info["name"]
 
         entity = IotaWattSensor(
-            coordinator=coordinator,
-            entity=ent,
-            mac_address=hub_mac_address,
-            name=name,
+            coordinator=coordinator, entity=ent, mac_address=hub_mac_address, name=name,
         )
-        entities=[entity]
+        entities = [entity]
         async_add_entities(entities)
 
     async_dispatcher_connect(hass, SIGNAL_ADD_DEVICE, async_new_entities)
@@ -61,7 +62,9 @@ class IotaWattSensor(IotaWattEntity):
 
     def __init__(self, coordinator, entity, mac_address, name):
         """Initialize the sensor."""
-        super().__init__(coordinator=coordinator, entity=entity, mac_address=mac_address, name=name)
+        super().__init__(
+            coordinator=coordinator, entity=entity, mac_address=mac_address, name=name
+        )
 
         self._ent = entity
         self._name = name
@@ -81,6 +84,11 @@ class IotaWattSensor(IotaWattEntity):
     @property
     def unit_of_measurement(self):
         """Return the unit of measurement of this entity, if any."""
+        unit = self.coordinator.data["sensors"][self._ent].getUnit()
+        if unit == "Watts":
+            return POWER_WATT
+        if unit == "Volts":
+            return VOLT
         return self.coordinator.data["sensors"][self._ent].getUnit()
 
     @property
