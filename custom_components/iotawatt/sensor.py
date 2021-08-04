@@ -5,7 +5,6 @@ import logging
 
 from homeassistant.const import (
     POWER_WATT,
-    ELECTRIC_POTENTIAL_VOLT,
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_VOLTAGE
 )
@@ -82,7 +81,7 @@ class IotaWattSensor(IotaWattEntity):
             self._attr_unit_of_measurement = POWER_WATT
             self._attr_device_class = DEVICE_CLASS_POWER
         elif unit == "Volts":
-            self._attr_unit_of_measurement = ELECTRIC_POTENTIAL_VOLT
+            self._attr_unit_of_measurement = "V"
             self._attr_device_class = DEVICE_CLASS_VOLTAGE
         else:
             self._attr_unit_of_measurement = unit
