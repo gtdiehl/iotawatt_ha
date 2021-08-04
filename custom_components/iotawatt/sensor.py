@@ -89,7 +89,7 @@ class IotaWattSensor(IotaWattEntity):
         if unit == "Watts":
             self._attr_unit_of_measurement = POWER_WATT
             self._attr_device_class = DEVICE_CLASS_POWER
-        if unit == "WattHours":
+        elif unit == "WattHours":
             self._attr_unit_of_measurement = ENERGY_WATT_HOUR
             self._attr_device_class = DEVICE_CLASS_ENERGY
         elif unit == "Volts":
