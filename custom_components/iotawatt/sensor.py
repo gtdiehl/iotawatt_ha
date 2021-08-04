@@ -112,8 +112,6 @@ class IotaWattSensor(IotaWattEntity):
                 "channel": channel
             }
 
-        if last_reset := self.last_reset:
-            attrs["last_reset"] = last_reset.isoformat()
         return attrs
 
     @property
