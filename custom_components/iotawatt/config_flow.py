@@ -88,7 +88,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
-            return self.async_create_entry(title=info["title"], data=user_input)
+            return self.async_create_entry(title=self._data["name"], data=user_input)
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
@@ -102,14 +102,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_PASSWORD): str,
             }
         )
-
+        _LOGGER.debug("Data: %s", self._data)
         if user_input is None:
-            _LOGGER.debug("fdsfsf")
-            return self.async_show_form(
-                step_id="auth", data_schema=data_schema
-            )
+            return self.async_show_form(step_id="auth", data_schema=data_schema)
         self._data.update(user_input)
-        return self.async_create_entry(title="title", data=self._data)
+        return self.async_create_entry(title=self._data["name"], data=self._data)
 
 
 class CannotConnect(exceptions.HomeAssistantError):

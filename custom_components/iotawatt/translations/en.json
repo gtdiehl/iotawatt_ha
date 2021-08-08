@@ -13,7 +13,8 @@
                 "data": {
                     "password": "Password",
                     "username": "Username"
-                }
+                },
+                "description": "The IoTawatt device requires authentication. Please enter the username and password and click the Submit button."
             },
             "user": {
                 "data": {
