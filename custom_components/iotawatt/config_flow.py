@@ -1,14 +1,14 @@
 """Config flow for iotawatt integration."""
-import httpx
 import json
 import logging
 
+import httpx
 from httpx import AsyncClient
 from iotawattpy.iotawatt import Iotawatt
 import voluptuous as vol
 
 from homeassistant import config_entries, core, exceptions
-from homeassistant.const import CONF_NAME, CONF_HOST, CONF_USERNAME, CONF_PASSWORD
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
 
 from .const import DOMAIN
 
@@ -43,9 +43,7 @@ async def validate_input(hass: core.HomeAssistant, data):
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
     session = AsyncClient()
-    iotawatt = Iotawatt(
-        data["name"], data["host"], session
-    )
+    iotawatt = Iotawatt(data["name"], data["host"], session)
     try:
         is_connected = await iotawatt.connect()
         _LOGGER.debug("isConnected: %s", is_connected)
@@ -81,7 +79,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data.update(user_input)
 
         try:
-            info = await validate_input(self.hass, user_input)
+            await validate_input(self.hass, user_input)
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
@@ -97,6 +95,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_auth(self, user_input=None):
+        """Authenticate user if authentication is enabled on the IoTaWatt device."""
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_USERNAME): str,
