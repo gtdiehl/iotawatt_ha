@@ -5,7 +5,7 @@
   "documentation": "https://www.home-assistant.io/integrations/iotawatt",
   "issue_tracker": "https://github.com/gtdiehl/iotawatt_ha",
   "requirements": [
-    "iotawattpy==0.0.6"
+    "iotawattpy==0.0.7"
   ],
   "ssdp": [],
   "zeroconf": [],
