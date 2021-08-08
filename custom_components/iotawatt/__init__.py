@@ -1,8 +1,8 @@
 """The iotawatt integration."""
-import asyncio
-import logging
-
 from datetime import timedelta
+import logging
+from typing import Dict, List
+
 from httpx import AsyncClient
 from iotawattpy.iotawatt import Iotawatt
 import voluptuous as vol
@@ -10,23 +10,21 @@ import voluptuous as vol
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_SCAN_INTERVAL
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady, PlatformNotReady
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
-    UpdateFailed,
 )
 
 from .const import (
+    COORDINATOR,
     DEFAULT_ICON,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    COORDINATOR,
     IOTAWATT_API,
     SIGNAL_ADD_DEVICE,
-    SIGNAL_DELETE_DEVICE,
 )
 
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
@@ -88,21 +86,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
 
 class IotawattUpdater(DataUpdateCoordinator):
-    """Class to manage fetching update data from the IoTaWatt Energy Device"""
+    """Class to manage fetching update data from the IoTaWatt Energy Device."""
 
     def __init__(self, hass: HomeAssistant, api: str, name: str, update_interval: int):
+        """Initialize IotaWattUpdater object."""
         self.api = api
-        self.sensorlist = {}
+        self.sensorlist: Dict[str, List[str]] = {}
 
         super().__init__(
             hass=hass,
             logger=_LOGGER,
             name=name,
-            update_interval=timedelta(seconds=update_interval)
+            update_interval=timedelta(seconds=update_interval),
         )
 
     async def _async_update_data(self):
-        """Fetch sensors from IoTaWatt device"""
+        """Fetch sensors from IoTaWatt device."""
 
         await self.api.update()
         sensors = self.api.getSensors()
@@ -119,6 +118,7 @@ class IotawattUpdater(DataUpdateCoordinator):
 
         return sensors
 
+
 class IotaWattEntity(CoordinatorEntity, SensorEntity):
     """Defines the base IoTaWatt Energy Device entity."""
 
@@ -134,7 +134,7 @@ class IotaWattEntity(CoordinatorEntity, SensorEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique, Home Assistant friendly identifier for this entity."""
-        return self._mac_addr
+        return self._mac_address
 
     @property
     def name(self) -> str:
