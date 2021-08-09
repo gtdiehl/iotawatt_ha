@@ -2,6 +2,6 @@
     "name": "IoTaWatt",
     "render_readme": true,
     "domains": ["sensor"],
-    "homeassistant": "2020.12.1",
+    "homeassistant": "2021.8.0",
     "iot_class": ["Local Polling"]
 }

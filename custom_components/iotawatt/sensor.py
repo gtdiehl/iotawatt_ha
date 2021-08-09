@@ -1,38 +1,20 @@
 """Support for IoTaWatt Energy monitor."""
-from datetime import timedelta, datetime
-from functools import partial
 import logging
 
+from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
 from homeassistant.const import (
-    POWER_WATT,
-    ENERGY_WATT_HOUR,
-    ELECTRIC_POTENTIAL_VOLT,
-    DEVICE_CLASS_POWER,
     DEVICE_CLASS_ENERGY,
-    DEVICE_CLASS_VOLTAGE
+    DEVICE_CLASS_POWER,
+    DEVICE_CLASS_VOLTAGE,
+    ELECTRIC_POTENTIAL_VOLT,
+    ENERGY_WATT_HOUR,
+    POWER_WATT,
 )
-
-from homeassistant.core import callback
-from homeassistant.components.sensor import (
-    STATE_CLASS_MEASUREMENT,
-)
-from homeassistant.helpers.dispatcher import (
-    async_dispatcher_connect,
-    async_dispatcher_send,
-)
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt
 
-from . import IotaWattEntity, IotawattUpdater
-from .const import (
-    COORDINATOR,
-    DOMAIN,
-    SIGNAL_ADD_DEVICE,
-    SIGNAL_DELETE_DEVICE,
-)
+from . import IotaWattEntity
+from .const import COORDINATOR, DOMAIN, SIGNAL_ADD_DEVICE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +43,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         name = sensor_info["name"]
 
         entity = IotaWattSensor(
-            coordinator=coordinator, entity=ent, mac_address=hub_mac_address, name=name,
+            coordinator=coordinator,
+            entity=ent,
+            mac_address=hub_mac_address,
+            name=name,
         )
         entities = [entity]
         async_add_entities(entities)
@@ -98,7 +83,6 @@ class IotaWattSensor(IotaWattEntity):
         else:
             self._attr_unit_of_measurement = unit
 
-
     @property
     def device_state_attributes(self):
         """Return the state attributes of the device."""
@@ -107,10 +91,7 @@ class IotaWattSensor(IotaWattEntity):
         else:
             channel = "N/A"
 
-        attrs = {
-                "type": self._io_type,
-                "channel": channel
-            }
+        attrs = {"type": self._io_type, "channel": channel}
 
         return attrs
 
