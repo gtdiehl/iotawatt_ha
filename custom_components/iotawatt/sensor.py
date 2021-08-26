@@ -9,6 +9,7 @@ from homeassistant.const import (
     ELECTRIC_POTENTIAL_VOLT,
     ENERGY_WATT_HOUR,
     POWER_WATT,
+    TIME_HOURS,
 )
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry
@@ -18,7 +19,16 @@ from homeassistant.util import dt
 from . import IotaWattEntity
 from .const import COORDINATOR, DOMAIN, SIGNAL_ADD_DEVICE
 
+from homeassistant.components.integration.sensor import (
+    DEFAULT_ROUND,
+    RIGHT_METHOD,
+    IntegrationSensor,
+)
+
 _LOGGER = logging.getLogger(__name__)
+
+
+ICON_INTEGRATION = "mdi:chart-histogram"
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -28,13 +38,27 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     entities = []
 
     for idx, ent in enumerate(coordinator.data["sensors"]):
+        sensor = coordinator.data["sensors"][ent]
         entity = IotaWattSensor(
             coordinator=coordinator,
             entity=ent,
-            mac_address=coordinator.data["sensors"][ent].hub_mac_address,
-            name=coordinator.data["sensors"][ent].getName(),
+            mac_address=sensor.hub_mac_address,
+            name=sensor.getName(),
         )
         entities.append(entity)
+        type = sensor.getType()
+        unit = sensor.getUnit()
+        if type == "Output" and unit == "Watts":
+            integral = IntegrationSensor(
+                f"sensor.iotawatt{ entity.unique_id }",
+                f"{ entity.name } integral",
+                DEFAULT_ROUND,
+                None,
+                TIME_HOURS,
+                None,
+                RIGHT_METHOD,
+            )
+            entities.append(integral)
 
     async_add_entities(entities)
 
