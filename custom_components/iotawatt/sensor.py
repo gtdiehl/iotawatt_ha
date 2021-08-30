@@ -100,7 +100,9 @@ class IotaWattSensor(IotaWattEntity, RestoreEntity):
             self._attr_unit_of_measurement = ENERGY_WATT_HOUR
             self._attr_device_class = DEVICE_CLASS_ENERGY
             self._attr_state_class = STATE_CLASS_TOTAL_INCREASING
-            self._accumulating = not sensor.getFromStart()
+            if not sensor.getFromStart():
+                self._accumulating = True
+                self._attr_icon = ICON_INTEGRATION
         elif unit == "Volts":
             self._attr_unit_of_measurement = ELECTRIC_POTENTIAL_VOLT
             self._attr_device_class = DEVICE_CLASS_VOLTAGE
@@ -202,10 +204,3 @@ class IotaWattSensor(IotaWattEntity, RestoreEntity):
         return self._iotawattEntry.getSensorID() + (
             ".accumulated" if self._accumulating else ""
         )
-
-    @property
-    def icon(self):
-        """Return the icon for the entity."""
-        if self._accumulating:
-            return ICON_INTEGRATION
-        return super().icon

@@ -94,7 +94,6 @@ class IotawattUpdater(DataUpdateCoordinator):
         """Initialize IotaWattUpdater object."""
         self.api = api
         self.sensorlist: Dict[str, List[str]] = {}
-        self.accumulatedValues = {}
 
         super().__init__(
             hass=hass,
@@ -138,8 +137,9 @@ class IotaWattEntity(CoordinatorEntity, SensorEntity):
 
         self._entity = entity
         self._name = name
-        self._icon = DEFAULT_ICON
         self._mac_address = mac_address
+
+        self._attr_icon = DEFAULT_ICON
 
     @property
     def unique_id(self) -> str:
@@ -150,8 +150,3 @@ class IotaWattEntity(CoordinatorEntity, SensorEntity):
     def name(self) -> str:
         """Return the name of the entity."""
         return self._name
-
-    @property
-    def icon(self):
-        """Return the icon for the entity."""
-        return self._icon
