@@ -94,8 +94,10 @@ class IotawattUpdater(DataUpdateCoordinator):
         """Initialize IotaWattUpdater object."""
         self.api = api
         self.sensorlist: Dict[str, List[str]] = {}
-        self.first_run = True
-        self.last_run = None
+
+        self._last_run = None
+        self._run_count = 0
+        self._refresh_requested = False
 
         super().__init__(
             hass=hass,
@@ -104,19 +106,29 @@ class IotawattUpdater(DataUpdateCoordinator):
             update_interval=timedelta(seconds=update_interval),
         )
 
+    @property
+    def first_run(self):
+        return self._run_count <= 1
+
     def updateLastRun(self, last_run):
         # We want to fetch the data from the iotawatt since HA was last shutdown.
         # We retrieve from the sensor last updated.
         # This method is called from each sensor upon their state being restored.
-        if self.last_run is None or last_run > self.last_run:
-            self.last_run = last_run
+        if self._last_run is None or last_run > self._last_run:
+            self._last_run = last_run
+
+    async def request_refresh(self):
+        if self._refresh_requested:
+            return
+        self._refresh_requested = True
+        await self.async_request_refresh()
 
     async def _async_update_data(self):
         """Fetch sensors from IoTaWatt device."""
 
         # During the first run, we will only create the sensors and retrieve
         # their previous values if any.
-        await self.api.update(lastUpdate=self.last_run if self.first_run else None)
+        await self.api.update(lastUpdate=self._last_run if self.first_run else None)
         sensors = self.api.getSensors()
 
         for sensor, entry in sensors["sensors"].items():
@@ -137,7 +149,8 @@ class IotawattUpdater(DataUpdateCoordinator):
                 async_dispatcher_send(self.hass, SIGNAL_ADD_DEVICE, to_add)
                 self.sensorlist[sensor] = entry
 
-        self.first_run = self.last_run is None
+        self._run_count += 1
+        self._refresh_requested = False
 
         return sensors
 

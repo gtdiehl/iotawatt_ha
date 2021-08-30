@@ -174,6 +174,8 @@ class IotaWattSensor(IotaWattEntity, RestoreEntity):
                     _LOGGER.warning("Could not restore last state: %s", err)
             else:
                 self.coordinator.updateLastRun(self.coordinator.api.getLastUpdateTime())
+            # Force a second update from the iotawatt to ensure that sensors are up to date.
+            await self.coordinator.request_refresh()
 
     @property
     def state(self):
