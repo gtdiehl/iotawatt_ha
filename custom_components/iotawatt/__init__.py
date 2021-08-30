@@ -1,7 +1,9 @@
 """The iotawatt integration."""
 from datetime import timedelta
+from decimal import Decimal, DecimalException
 import logging
 from typing import Dict, List
+from . import context
 
 from httpx import AsyncClient
 from iotawattpy.iotawatt import Iotawatt
@@ -92,6 +94,7 @@ class IotawattUpdater(DataUpdateCoordinator):
         """Initialize IotaWattUpdater object."""
         self.api = api
         self.sensorlist: Dict[str, List[str]] = {}
+        self.accumulatedValues = {}
 
         super().__init__(
             hass=hass,
@@ -107,15 +110,28 @@ class IotawattUpdater(DataUpdateCoordinator):
         sensors = self.api.getSensors()
 
         for sensor in sensors["sensors"]:
+            entry = sensors["sensors"][sensor]
             if sensor not in self.sensorlist:
+                _LOGGER.debug(f"First read sensor:{sensor} value:{entry.getValue()}")
+                unit = entry.getUnit()
+                suffix = ""
+                if unit == "WattHours" and entry.getFromStart():
+                    suffix = " Total Wh"
+                elif unit == "WattHours":
+                    suffix = ".Wh"
+
                 to_add = {
                     "entity": sensor,
-                    "mac_address": sensors["sensors"][sensor].hub_mac_address,
-                    "name": sensors["sensors"][sensor].getName(),
+                    "mac_address": entry.hub_mac_address,
+                    "name": entry.getBaseName() + suffix,
                 }
                 async_dispatcher_send(self.hass, SIGNAL_ADD_DEVICE, to_add)
-                self.sensorlist[sensor] = sensors["sensors"][sensor]
-
+                self.sensorlist[sensor] = entry
+            if sensor in self.accumulatedValues:
+                _LOGGER.debug(
+                    f"Accumulating sensor:{sensor} value:{round(self.accumulatedValues[sensor], 3)} with:{entry.getValue()}"
+                )
+                self.accumulatedValues[sensor] += Decimal(entry.getValue())
         return sensors
 
 
