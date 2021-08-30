@@ -208,4 +208,4 @@ class IotaWattSensor(IotaWattEntity, RestoreEntity):
         """Return the icon for the entity."""
         if self._accumulating:
             return ICON_INTEGRATION
-        return super().icon()
+        return super().icon
