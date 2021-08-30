@@ -109,9 +109,8 @@ class IotawattUpdater(DataUpdateCoordinator):
         await self.api.update()
         sensors = self.api.getSensors()
 
-        for sensor in sensors["sensors"]:
+        for sensor, entry in sensors["sensors"].items():
             if sensor not in self.sensorlist:
-                entry = sensors["sensors"][sensor]
                 _LOGGER.debug(f"First read sensor:{sensor} value:{entry.getValue()}")
                 unit = entry.getUnit()
                 suffix = ""
