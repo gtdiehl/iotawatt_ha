@@ -110,8 +110,8 @@ class IotawattUpdater(DataUpdateCoordinator):
         sensors = self.api.getSensors()
 
         for sensor in sensors["sensors"]:
-            entry = sensors["sensors"][sensor]
             if sensor not in self.sensorlist:
+                entry = sensors["sensors"][sensor]
                 _LOGGER.debug(f"First read sensor:{sensor} value:{entry.getValue()}")
                 unit = entry.getUnit()
                 suffix = ""
@@ -127,11 +127,6 @@ class IotawattUpdater(DataUpdateCoordinator):
                 }
                 async_dispatcher_send(self.hass, SIGNAL_ADD_DEVICE, to_add)
                 self.sensorlist[sensor] = entry
-            if sensor in self.accumulatedValues:
-                _LOGGER.debug(
-                    f"Accumulating sensor:{sensor} value:{round(self.accumulatedValues[sensor], 3)} with:{entry.getValue()}"
-                )
-                self.accumulatedValues[sensor] += Decimal(entry.getValue())
         return sensors
 
 
