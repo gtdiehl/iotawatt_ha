@@ -30,6 +30,7 @@ from .const import COORDINATOR, DOMAIN, SIGNAL_ADD_DEVICE
 _LOGGER = logging.getLogger(__name__)
 
 ATTR_SOURCE_ID = "source"
+ATTR_LAST_UPDATE = "last_update"
 
 ICON_INTEGRATION = "mdi:chart-histogram"
 
@@ -116,6 +117,9 @@ class IotaWattSensor(IotaWattEntity, RestoreEntity):
     @property
     def device_state_attributes(self):
         """Return the state attributes of the device."""
+        if self.coordinator.first_run:
+            return None
+
         if self._io_type == "Input":
             channel = self._iotawattEntry.getChannel()
         else:
@@ -123,7 +127,9 @@ class IotaWattSensor(IotaWattEntity, RestoreEntity):
 
         attrs = {"type": self._io_type, "channel": channel}
         if self._accumulating:
-            attrs["last_update"] = self.coordinator.api.getLastUpdateTime().isoformat()
+            attrs[
+                ATTR_LAST_UPDATE
+            ] = self.coordinator.api.getLastUpdateTime().isoformat()
 
         return attrs
 
@@ -155,28 +161,28 @@ class IotaWattSensor(IotaWattEntity, RestoreEntity):
         await super().async_added_to_hass()
         if self._accumulating:
             state = await self.async_get_last_state()
-            newValue = Decimal(self._iotawattEntry.getValue())
+            self._accumulatedValue = Decimal(0)
             if state:
                 try:
-                    self._accumulatedValue = Decimal(state.state) + newValue
-                    _LOGGER.debug(
-                        f"Entity:{self._ent} Restored:{Decimal(state.state)} newValue:{newValue}"
-                    )
+                    self._accumulatedValue = Decimal(state.state)
+                    _LOGGER.debug(f"Entity:{self._ent} Restored:{Decimal(state.state)}")
+                    if ATTR_LAST_UPDATE in state.attributes:
+                        self.coordinator.updateLastRun(
+                            dt.parse_datetime(state.attributes.get(ATTR_LAST_UPDATE))
+                        )
                 except (DecimalException, ValueError) as err:
                     _LOGGER.warning("Could not restore last state: %s", err)
-                    self._accumulatedValue = newValue
             else:
-                # No previous history (first setup), set the first one to the last read.
-                self._accumulatedValue = newValue
-            self.async_write_ha_state()
+                self.coordinator.updateLastRun(self.coordinator.api.getLastUpdateTime())
 
     @property
     def state(self):
         """Return the state of the sensor."""
         if not self._accumulating:
             return self._iotawattEntry.getValue()
-        # Will return None if state hasn't yet been restored.
-        return round(self._accumulatedValue, 1) if self._accumulatedValue else None
+        return (
+            round(self._accumulatedValue, 1) if not self.coordinator.first_run else None
+        )
 
     @property
     def last_reset(self):
