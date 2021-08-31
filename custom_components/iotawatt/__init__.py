@@ -3,7 +3,6 @@ from datetime import timedelta
 from decimal import Decimal, DecimalException
 import logging
 from typing import Dict, List
-from . import context
 
 from httpx import AsyncClient
 from iotawattpy.iotawatt import Iotawatt
