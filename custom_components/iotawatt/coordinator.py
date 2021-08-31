@@ -4,13 +4,12 @@ from __future__ import annotations
 from datetime import timedelta
 import logging
 
-from iotawattpy.iotawatt import Iotawatt
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import httpx_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from iotawattpy.iotawatt import Iotawatt
 
 from .const import CONNECTION_ERRORS
 
@@ -36,6 +35,7 @@ class IotawattUpdater(DataUpdateCoordinator):
         self._refresh_requested = False
 
     def updateLastRun(self, last_run):
+        """Notify coordinator of a sensor last update time."""
         # We want to fetch the data from the iotawatt since HA was last shutdown.
         # We retrieve from the sensor last updated.
         # This method is called from each sensor upon their state being restored.
@@ -43,7 +43,7 @@ class IotawattUpdater(DataUpdateCoordinator):
             self._last_run = last_run
 
     async def request_refresh(self):
-        """Request a refresh of the iotawatt sensors"""
+        """Request a refresh of the iotawatt sensors."""
         if self._refresh_requested:
             return
         self._refresh_requested = True

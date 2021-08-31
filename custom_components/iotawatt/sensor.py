@@ -6,8 +6,6 @@ from decimal import Decimal, DecimalException
 import logging
 from typing import Callable
 
-from iotawattpy.sensor import Sensor
-
 from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
@@ -33,12 +31,13 @@ from homeassistant.helpers import entity, entity_registry, update_coordinator
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt
+from iotawattpy.sensor import Sensor
 
 from .const import (
+    ATTR_LAST_UPDATE,
     DOMAIN,
     VOLT_AMPERE_REACTIVE,
     VOLT_AMPERE_REACTIVE_HOURS,
-    ATTR_LAST_UPDATE,
 )
 from .coordinator import IotawattUpdater
 
@@ -230,7 +229,7 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
         return attrs
 
     async def async_added_to_hass(self):
-        """Load the last known state value of the entity if the accumulated type"""
+        """Load the last known state value of the entity if the accumulated type."""
         await super().async_added_to_hass()
         if self._accumulating:
             state = await self.async_get_last_state()
