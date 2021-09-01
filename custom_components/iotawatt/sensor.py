@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, DecimalException
 import logging
 from typing import Callable
+
+from iotawattpy.sensor import Sensor
 
 from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
@@ -31,7 +32,6 @@ from homeassistant.helpers import entity, entity_registry, update_coordinator
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt
-from iotawattpy.sensor import Sensor
 
 from .const import (
     ATTR_LAST_UPDATE,
@@ -210,7 +210,7 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
             assert (
                 self._accumulatedValue is not None
             ), "async_added_to_hass must have been called first"
-            self._accumulatedValue += Decimal(self._sensor_data.getValue())
+            self._accumulatedValue += float(self._sensor_data.getValue())
 
         super()._handle_coordinator_update()
 
@@ -233,18 +233,16 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
         await super().async_added_to_hass()
         if self._accumulating:
             state = await self.async_get_last_state()
-            self._accumulatedValue = Decimal(0)
+            self._accumulatedValue = 0.0
             if state:
                 try:
-                    self._accumulatedValue = Decimal(state.state)
+                    self._accumulatedValue = float(state.state)
                     if ATTR_LAST_UPDATE in state.attributes:
                         self.coordinator.updateLastRun(
                             dt.parse_datetime(state.attributes.get(ATTR_LAST_UPDATE))
                         )
-                except (DecimalException, ValueError) as err:
+                except (ValueError) as err:
                     _LOGGER.warning("Could not restore last state: %s", err)
-            else:
-                self.coordinator.updateLastRun(self.coordinator.api.getLastUpdateTime())
             # Force a second update from the iotawatt to ensure that sensors are up to date.
             await self.coordinator.request_refresh()
 
