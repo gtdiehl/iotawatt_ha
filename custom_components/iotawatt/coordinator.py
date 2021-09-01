@@ -4,12 +4,13 @@ from __future__ import annotations
 from datetime import timedelta
 import logging
 
+from iotawattpy.iotawatt import Iotawatt
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import httpx_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from iotawattpy.iotawatt import Iotawatt
 
 from .const import CONNECTION_ERRORS
 
