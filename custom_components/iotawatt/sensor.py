@@ -183,7 +183,7 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
     @property
     def name(self) -> str | None:
         """Return name of the entity."""
-        return self._sensor_data.getName() + self._name_suffix
+        return self._sensor_data.getSourceName() + self._name_suffix
 
     @property
     def device_info(self) -> entity.DeviceInfo | None:
