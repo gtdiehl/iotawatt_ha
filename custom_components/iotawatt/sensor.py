@@ -265,8 +265,8 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
             await self.coordinator.request_refresh()
 
     @property
-    def native_value(self) -> entity.StateType:
-        """Return the state of the sensor."""
+    def state(self):
+        """Return the name of the sensor."""
         if func := self.entity_description.value:
             return func(self._sensor_data.getValue())
 
