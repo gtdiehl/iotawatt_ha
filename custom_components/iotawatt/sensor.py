@@ -1,137 +1,277 @@
 """Support for IoTaWatt Energy monitor."""
-import logging
+from __future__ import annotations
 
-from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
+from datetime import datetime
+from dataclasses import dataclass
+import logging
+from typing import Callable
+
+from iotawattpy.sensor import Sensor
+
+from homeassistant.components.sensor import (
+    ATTR_LAST_RESET,
+    STATE_CLASS_MEASUREMENT,
+    SensorEntity,
+    SensorEntityDescription,
+)
+
 from homeassistant.const import (
+    DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_ENERGY,
     DEVICE_CLASS_POWER,
+    DEVICE_CLASS_POWER_FACTOR,
     DEVICE_CLASS_VOLTAGE,
+    ELECTRIC_CURRENT_AMPERE,
     ELECTRIC_POTENTIAL_VOLT,
     ENERGY_WATT_HOUR,
+    FREQUENCY_HERTZ,
+    PERCENTAGE,
+    POWER_VOLT_AMPERE,
     POWER_WATT,
 )
 from homeassistant.core import callback
-from homeassistant.helpers import entity_registry
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers import entity, entity_registry, update_coordinator
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt
 
-from . import IotaWattEntity
-from .const import COORDINATOR, DOMAIN, SIGNAL_ADD_DEVICE
+from .const import (
+    ATTR_LAST_UPDATE,
+    DOMAIN,
+    VOLT_AMPERE_REACTIVE,
+    VOLT_AMPERE_REACTIVE_HOURS,
+)
+from .coordinator import IotawattUpdater
 
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass
+class IotaWattSensorEntityDescription(SensorEntityDescription):
+    """Class describing IotaWatt sensor entities."""
+
+    value: Callable | None = None
+
+
+ENTITY_DESCRIPTION_KEY_MAP: dict[str, IotaWattSensorEntityDescription] = {
+    "Amps": IotaWattSensorEntityDescription(
+        "Amps",
+        unit_of_measurement=ELECTRIC_CURRENT_AMPERE,
+        state_class=STATE_CLASS_MEASUREMENT,
+        device_class=DEVICE_CLASS_CURRENT,
+        entity_registry_enabled_default=False,
+    ),
+    "Hz": IotaWattSensorEntityDescription(
+        "Hz",
+        unit_of_measurement=FREQUENCY_HERTZ,
+        state_class=STATE_CLASS_MEASUREMENT,
+        icon="mdi:flash",
+        entity_registry_enabled_default=False,
+    ),
+    "PF": IotaWattSensorEntityDescription(
+        "PF",
+        unit_of_measurement=PERCENTAGE,
+        state_class=STATE_CLASS_MEASUREMENT,
+        device_class=DEVICE_CLASS_POWER_FACTOR,
+        value=lambda value: value * 100,
+        entity_registry_enabled_default=False,
+    ),
+    "Watts": IotaWattSensorEntityDescription(
+        "Watts",
+        unit_of_measurement=POWER_WATT,
+        state_class=STATE_CLASS_MEASUREMENT,
+        device_class=DEVICE_CLASS_POWER,
+    ),
+    "WattHours": IotaWattSensorEntityDescription(
+        "WattHours",
+        unit_of_measurement=ENERGY_WATT_HOUR,
+        device_class=DEVICE_CLASS_ENERGY,
+        state_class=STATE_CLASS_MEASUREMENT,
+    ),
+    "VA": IotaWattSensorEntityDescription(
+        "VA",
+        unit_of_measurement=POWER_VOLT_AMPERE,
+        state_class=STATE_CLASS_MEASUREMENT,
+        icon="mdi:flash",
+        entity_registry_enabled_default=False,
+    ),
+    "VAR": IotaWattSensorEntityDescription(
+        "VAR",
+        unit_of_measurement=VOLT_AMPERE_REACTIVE,
+        state_class=STATE_CLASS_MEASUREMENT,
+        icon="mdi:flash",
+        entity_registry_enabled_default=False,
+    ),
+    "VARh": IotaWattSensorEntityDescription(
+        "VARh",
+        unit_of_measurement=VOLT_AMPERE_REACTIVE_HOURS,
+        state_class=STATE_CLASS_MEASUREMENT,
+        icon="mdi:flash",
+        entity_registry_enabled_default=False,
+    ),
+    "Volts": IotaWattSensorEntityDescription(
+        "Volts",
+        unit_of_measurement=ELECTRIC_POTENTIAL_VOLT,
+        state_class=STATE_CLASS_MEASUREMENT,
+        device_class=DEVICE_CLASS_VOLTAGE,
+        entity_registry_enabled_default=False,
+    ),
+}
+
+
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Add sensors for passed config_entry in HA."""
+    coordinator: IotawattUpdater = hass.data[DOMAIN][config_entry.entry_id]
+    created = set()
 
-    coordinator = hass.data[DOMAIN][config_entry.entry_id][COORDINATOR]
-    entities = []
-
-    for idx, ent in enumerate(coordinator.data["sensors"]):
-        entity = IotaWattSensor(
+    @callback
+    def _create_entity(key: str) -> IotaWattSensor:
+        """Create a sensor entity."""
+        created.add(key)
+        return IotaWattSensor(
             coordinator=coordinator,
-            entity=ent,
-            mac_address=coordinator.data["sensors"][ent].hub_mac_address,
-            name=coordinator.data["sensors"][ent].getName(),
+            key=key,
+            entity_description=ENTITY_DESCRIPTION_KEY_MAP.get(
+                coordinator.data["sensors"][key].getUnit(),
+                IotaWattSensorEntityDescription("base_sensor"),
+            ),
         )
-        entities.append(entity)
 
-    async_add_entities(entities)
+    async_add_entities(_create_entity(key) for key in coordinator.data["sensors"])
 
-    async def async_new_entities(sensor_info):
-        """Remove an entity."""
-        ent = sensor_info["entity"]
-        hub_mac_address = sensor_info["mac_address"]
-        name = sensor_info["name"]
+    @callback
+    def new_data_received():
+        """Check for new sensors."""
+        entities = [
+            _create_entity(key)
+            for key in coordinator.data["sensors"]
+            if key not in created
+        ]
+        if entities:
+            async_add_entities(entities)
 
-        entity = IotaWattSensor(
-            coordinator=coordinator,
-            entity=ent,
-            mac_address=hub_mac_address,
-            name=name,
-        )
-        entities = [entity]
-        async_add_entities(entities)
-
-    async_dispatcher_connect(hass, SIGNAL_ADD_DEVICE, async_new_entities)
+    coordinator.async_add_listener(new_data_received)
 
 
-class IotaWattSensor(IotaWattEntity):
+class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, SensorEntity):
     """Defines a IoTaWatt Energy Sensor."""
 
-    def __init__(self, coordinator, entity, mac_address, name):
+    entity_description: IotaWattSensorEntityDescription
+    _attr_force_update = True
+
+    def __init__(
+        self,
+        coordinator,
+        key,
+        entity_description: IotaWattSensorEntityDescription,
+    ):
         """Initialize the sensor."""
-        super().__init__(
-            coordinator=coordinator, entity=entity, mac_address=mac_address, name=name
-        )
+        super().__init__(coordinator=coordinator)
 
-        sensor = self.coordinator.data["sensors"][entity]
-        self._ent = entity
-        self._name = name
-        self._io_type = sensor.getType()
-        self._state = None
-        self._attr_state_class = STATE_CLASS_MEASUREMENT
-        self._attr_force_update = True
-
-        unit = sensor.getUnit()
-        if unit == "Watts":
-            self._attr_unit_of_measurement = POWER_WATT
-            self._attr_device_class = DEVICE_CLASS_POWER
-        elif unit == "WattHours":
-            self._attr_unit_of_measurement = ENERGY_WATT_HOUR
-            self._attr_device_class = DEVICE_CLASS_ENERGY
-        elif unit == "Volts":
-            self._attr_unit_of_measurement = ELECTRIC_POTENTIAL_VOLT
-            self._attr_device_class = DEVICE_CLASS_VOLTAGE
-        else:
-            self._attr_unit_of_measurement = unit
+        self._key = key
+        data = self._sensor_data
+        self._accumulating = data.getUnit() == "WattHours" and not data.getFromStart()
+        self._accumulated_value = None
+        unit = data.getUnit() + self._name_suffix
+        if data.getType() == "Input":
+            self._attr_unique_id = (
+                f"{data.hub_mac_address}-input-{data.getChannel()}-{unit}"
+            )
+        self.entity_description = entity_description
 
     @property
-    def device_state_attributes(self):
-        """Return the state attributes of the device."""
-        if self._io_type == "Input":
-            channel = self.coordinator.data["sensors"][self._ent].getChannel()
-        else:
-            channel = "N/A"
-
-        attrs = {"type": self._io_type, "channel": channel}
-
-        return attrs
+    def _sensor_data(self) -> Sensor:
+        """Return sensor data."""
+        return self.coordinator.data["sensors"][self._key]
 
     @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self.coordinator.data["sensors"][self._ent].getValue()
+    def _name_suffix(self) -> str:
+        return ".accumulated" if self._accumulating else ""
 
     @property
-    def last_reset(self):
-        """Return the time when the sensor was last reset, if any."""
-        last_reset = self.coordinator.data["sensors"][self._ent].getBegin()
-        if last_reset is None:
-            return None
-        return dt.parse_datetime(last_reset)
+    def name(self) -> str | None:
+        """Return name of the entity."""
+        return self._sensor_data.getSourceName() + self._name_suffix
 
     @property
-    def name(self):
-        """Return the name of the sensor."""
-        name = (
-            "IoTaWatt "
-            + str(self._io_type)
-            + " "
-            + str(self.coordinator.data["sensors"][self._ent].getName())
-        )
-        return name
-
-    @property
-    def unique_id(self) -> str:
-        """Return the Uniqie ID for the sensor."""
-        return self.coordinator.data["sensors"][self._ent].getSensorID()
+    def device_info(self) -> entity.DeviceInfo | None:
+        """Return device info."""
+        return {
+            "connections": {
+                (CONNECTION_NETWORK_MAC, self._sensor_data.hub_mac_address)
+            },
+            "manufacturer": "IoTaWatt",
+            "model": "IoTaWatt",
+        }
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        if self._ent not in self.coordinator.data["sensors"]:
-            entity_registry.async_get(self.hass).async_remove(self.entity_id)
+        if self._key not in self.coordinator.data["sensors"]:
+            if self._attr_unique_id:
+                entity_registry.async_get(self.hass).async_remove(self.entity_id)
+            else:
+                self.hass.async_create_task(self.async_remove())
             return
 
+        if self._accumulating:
+            assert (
+                self._accumulated_value is not None
+            ), "async_added_to_hass must have been called first"
+            self._accumulated_value += float(self._sensor_data.getValue())
+
         super()._handle_coordinator_update()
+
+    @property
+    def extra_state_attributes(self):
+        """Return the extra state attributes of the entity."""
+        data = self._sensor_data
+        attrs = {"type": data.getType()}
+        if attrs["type"] == "Input":
+            attrs["channel"] = data.getChannel()
+        if self._accumulating:
+            attrs[
+                ATTR_LAST_UPDATE
+            ] = self.coordinator.api.getLastUpdateTime().isoformat()
+
+        return attrs
+
+    @property
+    def last_reset(self):
+        """Return the time when the sensor was last reset, if any."""
+        if self._accumulating:
+            return datetime.min
+        last_reset = self._sensor_data.getBegin()
+        if last_reset is None:
+            return None
+        return dt.parse_datetime(last_reset)
+
+    async def async_added_to_hass(self):
+        """Load the last known state value of the entity if the accumulated type."""
+        await super().async_added_to_hass()
+        if self._accumulating:
+            state = await self.async_get_last_state()
+            self._accumulated_value = 0.0
+            if state:
+                try:
+                    self._accumulated_value = float(state.state)
+                    if ATTR_LAST_UPDATE in state.attributes:
+                        self.coordinator.update_last_run(
+                            dt.parse_datetime(state.attributes.get(ATTR_LAST_UPDATE))
+                        )
+                except (ValueError) as err:
+                    _LOGGER.warning("Could not restore last state: %s", err)
+            # Force a second update from the iotawatt to ensure that sensors are up to date.
+            await self.coordinator.request_refresh()
+
+    @property
+    def native_value(self) -> entity.StateType:
+        """Return the state of the sensor."""
+        if func := self.entity_description.value:
+            return func(self._sensor_data.getValue())
+
+        if not self._accumulating:
+            return self._sensor_data.getValue()
+        if self._accumulated_value is None:
+            return None
+        return round(self._accumulated_value, 1)
