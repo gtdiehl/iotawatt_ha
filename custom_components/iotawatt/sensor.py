@@ -9,6 +9,7 @@ from iotawattpy.sensor import Sensor
 
 from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL_INCREASING,
     SensorEntity,
     SensorEntityDescription,
 )
@@ -83,7 +84,6 @@ ENTITY_DESCRIPTION_KEY_MAP: dict[str, IotaWattSensorEntityDescription] = {
         "WattHours",
         native_unit_of_measurement=ENERGY_WATT_HOUR,
         device_class=DEVICE_CLASS_ENERGY,
-        icon="mdi:chart-histogram",
     ),
     "VA": IotaWattSensorEntityDescription(
         "VA",
@@ -168,12 +168,14 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
         self._key = key
         data = self._sensor_data
         self._accumulating = data.getUnit() == "WattHours" and not data.getFromStart()
-        self._accumulatingValue = None
+        self._accumulated_value = None
         if data.getType() == "Input":
             unit = data.getUnit() + self._name_suffix
             self._attr_unique_id = (
                 f"{data.hub_mac_address}-input-{data.getChannel()}-{unit}"
             )
+        if self._accumulating:
+            self._attr_state_class = STATE_CLASS_TOTAL_INCREASING
         self.entity_description = entity_description
 
     @property
@@ -213,9 +215,9 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
 
         if self._accumulating:
             assert (
-                self._accumulatedValue is not None
+                self._accumulated_value is not None
             ), "async_added_to_hass must have been called first"
-            self._accumulatedValue += float(self._sensor_data.getValue())
+            self._accumulated_value += float(self._sensor_data.getValue())
 
         super()._handle_coordinator_update()
 
@@ -238,12 +240,12 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
         await super().async_added_to_hass()
         if self._accumulating:
             state = await self.async_get_last_state()
-            self._accumulatedValue = 0.0
+            self._accumulated_value = 0.0
             if state:
                 try:
-                    self._accumulatedValue = float(state.state)
+                    self._accumulated_value = float(state.state)
                     if ATTR_LAST_UPDATE in state.attributes:
-                        self.coordinator.updateLastRun(
+                        self.coordinator.update_last_run(
                             dt.parse_datetime(state.attributes.get(ATTR_LAST_UPDATE))
                         )
                 except (ValueError) as err:
@@ -259,8 +261,6 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
 
         if not self._accumulating:
             return self._sensor_data.getValue()
-        return (
-            round(self._accumulatedValue, 1)
-            if self._accumulatedValue is not None
-            else None
-        )
+        if self._accumulated_value is None:
+            return None
+        return round(self._accumulated_value, 1)
