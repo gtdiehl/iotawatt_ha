@@ -11,10 +11,10 @@ from iotawattpy.sensor import Sensor
 from homeassistant.components.sensor import (
     ATTR_LAST_RESET,
     STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL_INCREASING,
     SensorEntity,
     SensorEntityDescription,
 )
-
 from homeassistant.const import (
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_ENERGY,
@@ -56,21 +56,21 @@ class IotaWattSensorEntityDescription(SensorEntityDescription):
 ENTITY_DESCRIPTION_KEY_MAP: dict[str, IotaWattSensorEntityDescription] = {
     "Amps": IotaWattSensorEntityDescription(
         "Amps",
-        unit_of_measurement=ELECTRIC_CURRENT_AMPERE,
+        native_unit_of_measurement=ELECTRIC_CURRENT_AMPERE,
         state_class=STATE_CLASS_MEASUREMENT,
         device_class=DEVICE_CLASS_CURRENT,
         entity_registry_enabled_default=False,
     ),
     "Hz": IotaWattSensorEntityDescription(
         "Hz",
-        unit_of_measurement=FREQUENCY_HERTZ,
+        native_unit_of_measurement=FREQUENCY_HERTZ,
         state_class=STATE_CLASS_MEASUREMENT,
         icon="mdi:flash",
         entity_registry_enabled_default=False,
     ),
     "PF": IotaWattSensorEntityDescription(
         "PF",
-        unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=PERCENTAGE,
         state_class=STATE_CLASS_MEASUREMENT,
         device_class=DEVICE_CLASS_POWER_FACTOR,
         value=lambda value: value * 100,
@@ -78,40 +78,40 @@ ENTITY_DESCRIPTION_KEY_MAP: dict[str, IotaWattSensorEntityDescription] = {
     ),
     "Watts": IotaWattSensorEntityDescription(
         "Watts",
-        unit_of_measurement=POWER_WATT,
+        native_unit_of_measurement=POWER_WATT,
         state_class=STATE_CLASS_MEASUREMENT,
         device_class=DEVICE_CLASS_POWER,
     ),
     "WattHours": IotaWattSensorEntityDescription(
         "WattHours",
-        unit_of_measurement=ENERGY_WATT_HOUR,
+        native_unit_of_measurement=ENERGY_WATT_HOUR,
+        state_class=STATE_CLASS_TOTAL_INCREASING,
         device_class=DEVICE_CLASS_ENERGY,
-        state_class=STATE_CLASS_MEASUREMENT,
     ),
     "VA": IotaWattSensorEntityDescription(
         "VA",
-        unit_of_measurement=POWER_VOLT_AMPERE,
+        native_unit_of_measurement=POWER_VOLT_AMPERE,
         state_class=STATE_CLASS_MEASUREMENT,
         icon="mdi:flash",
         entity_registry_enabled_default=False,
     ),
     "VAR": IotaWattSensorEntityDescription(
         "VAR",
-        unit_of_measurement=VOLT_AMPERE_REACTIVE,
+        native_unit_of_measurement=VOLT_AMPERE_REACTIVE,
         state_class=STATE_CLASS_MEASUREMENT,
         icon="mdi:flash",
         entity_registry_enabled_default=False,
     ),
     "VARh": IotaWattSensorEntityDescription(
         "VARh",
-        unit_of_measurement=VOLT_AMPERE_REACTIVE_HOURS,
+        native_unit_of_measurement=VOLT_AMPERE_REACTIVE_HOURS,
         state_class=STATE_CLASS_MEASUREMENT,
         icon="mdi:flash",
         entity_registry_enabled_default=False,
     ),
     "Volts": IotaWattSensorEntityDescription(
         "Volts",
-        unit_of_measurement=ELECTRIC_POTENTIAL_VOLT,
+        native_unit_of_measurement=ELECTRIC_POTENTIAL_VOLT,
         state_class=STATE_CLASS_MEASUREMENT,
         device_class=DEVICE_CLASS_VOLTAGE,
         entity_registry_enabled_default=False,
@@ -172,8 +172,8 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
         data = self._sensor_data
         self._accumulating = data.getUnit() == "WattHours" and not data.getFromStart()
         self._accumulated_value = None
-        unit = data.getUnit() + self._name_suffix
         if data.getType() == "Input":
+            unit = data.getUnit() + self._name_suffix
             self._attr_unique_id = (
                 f"{data.hub_mac_address}-input-{data.getChannel()}-{unit}"
             )
@@ -238,13 +238,16 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
 
     @property
     def last_reset(self):
-        """Return the time when the sensor was last reset, if any."""
-        if self._accumulating:
-            return datetime.min
-        last_reset = self._sensor_data.getBegin()
-        if last_reset is None:
-            return None
-        return dt.parse_datetime(last_reset)
+       """Return the time when the sensor was last reset, if any."""
+       if self.state_class == STATE_CLASS_MEASUREMENT:
+           return None
+
+       if self._accumulating:
+           return datetime.min  # an accumulating sensor never reset.
+       last_reset = self._sensor_data.getBegin()
+       if last_reset is None:
+           return None
+       return dt.parse_datetime(last_reset)
 
     async def async_added_to_hass(self):
         """Load the last known state value of the entity if the accumulated type."""
@@ -265,8 +268,8 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
             await self.coordinator.request_refresh()
 
     @property
-    def state(self):
-        """Return the name of the sensor."""
+    def native_value(self) -> entity.StateType:
+        """Return the state of the sensor."""
         if func := self.entity_description.value:
             return func(self._sensor_data.getValue())
 
