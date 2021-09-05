@@ -128,13 +128,19 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     def _create_entity(key: str) -> IotaWattSensor:
         """Create a sensor entity."""
         created.add(key)
+        data = coordinator.data["sensors"][key]
+        description = ENTITY_DESCRIPTION_KEY_MAP.get(
+            data.getUnit(), IotaWattSensorEntityDescription("base_sensor")
+        )
+        if data.getUnit() == "WattHours" and not data.getFromStart():
+            return IotaWattAccumulatingSensor(
+                coordinator=coordinator, key=key, entity_description=description
+            )
+
         return IotaWattSensor(
             coordinator=coordinator,
             key=key,
-            entity_description=ENTITY_DESCRIPTION_KEY_MAP.get(
-                coordinator.data["sensors"][key].getUnit(),
-                IotaWattSensorEntityDescription("base_sensor"),
-            ),
+            entity_description=description,
         )
 
     async_add_entities(_create_entity(key) for key in coordinator.data["sensors"])
@@ -153,29 +159,26 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     coordinator.async_add_listener(new_data_received)
 
 
-class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, SensorEntity):
+class IotaWattSensor(update_coordinator.CoordinatorEntity, SensorEntity):
     """Defines a IoTaWatt Energy Sensor."""
 
     entity_description: IotaWattSensorEntityDescription
-    _attr_force_update = True
+    coordinator: IotawattUpdater
 
     def __init__(
         self,
-        coordinator,
-        key,
+        coordinator: IotawattUpdater,
+        key: str,
         entity_description: IotaWattSensorEntityDescription,
-    ):
+    ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator=coordinator)
 
         self._key = key
         data = self._sensor_data
-        self._accumulating = data.getUnit() == "WattHours" and not data.getFromStart()
-        self._accumulated_value = None
         if data.getType() == "Input":
-            unit = data.getUnit() + self._name_suffix
             self._attr_unique_id = (
-                f"{data.hub_mac_address}-input-{data.getChannel()}-{unit}"
+                f"{data.hub_mac_address}-input-{data.getChannel()}-{data.getUnit()}"
             )
         self.entity_description = entity_description
 
@@ -185,13 +188,9 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
         return self.coordinator.data["sensors"][self._key]
 
     @property
-    def _name_suffix(self) -> str:
-        return ".accumulated" if self._accumulating else ""
-
-    @property
     def name(self) -> str | None:
         """Return name of the entity."""
-        return self._sensor_data.getSourceName() + self._name_suffix
+        return self._sensor_data.getName()
 
     @property
     def device_info(self) -> entity.DeviceInfo | None:
@@ -213,59 +212,16 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
             else:
                 self.hass.async_create_task(self.async_remove())
             return
-
-        if self._accumulating:
-            assert (
-                self._accumulated_value is not None
-            ), "async_added_to_hass must have been called first"
-            self._accumulated_value += float(self._sensor_data.getValue())
-
         super()._handle_coordinator_update()
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, str]:
         """Return the extra state attributes of the entity."""
         data = self._sensor_data
         attrs = {"type": data.getType()}
         if attrs["type"] == "Input":
             attrs["channel"] = data.getChannel()
-        if self._accumulating:
-            attrs[
-                ATTR_LAST_UPDATE
-            ] = self.coordinator.api.getLastUpdateTime().isoformat()
-
         return attrs
-
-    @property
-    def last_reset(self):
-       """Return the time when the sensor was last reset, if any."""
-       if self.state_class == STATE_CLASS_MEASUREMENT:
-           return None
-
-       if self._accumulating:
-           return datetime.min  # an accumulating sensor never reset.
-       last_reset = self._sensor_data.getBegin()
-       if last_reset is None:
-           return None
-       return dt.parse_datetime(last_reset)
-
-    async def async_added_to_hass(self):
-        """Load the last known state value of the entity if the accumulated type."""
-        await super().async_added_to_hass()
-        if self._accumulating:
-            state = await self.async_get_last_state()
-            self._accumulated_value = 0.0
-            if state:
-                try:
-                    self._accumulated_value = float(state.state)
-                    if ATTR_LAST_UPDATE in state.attributes:
-                        self.coordinator.update_last_run(
-                            dt.parse_datetime(state.attributes.get(ATTR_LAST_UPDATE))
-                        )
-                except (ValueError) as err:
-                    _LOGGER.warning("Could not restore last state: %s", err)
-            # Force a second update from the iotawatt to ensure that sensors are up to date.
-            await self.coordinator.request_refresh()
 
     @property
     def native_value(self) -> entity.StateType:
@@ -273,8 +229,79 @@ class IotaWattSensor(update_coordinator.CoordinatorEntity, RestoreEntity, Sensor
         if func := self.entity_description.value:
             return func(self._sensor_data.getValue())
 
-        if not self._accumulating:
-            return self._sensor_data.getValue()
+        return self._sensor_data.getValue()
+
+
+class IotaWattAccumulatingSensor(IotaWattSensor, RestoreEntity):
+    """Defines a IoTaWatt Accumulative Energy (High Accuracy) Sensor."""
+
+    def __init__(
+        self,
+        coordinator: IotawattUpdater,
+        key: str,
+        entity_description: IotaWattSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+
+        super().__init__(coordinator, key, entity_description)
+
+        self._attr_state_class = STATE_CLASS_TOTAL_INCREASING
+        if self._attr_unique_id is not None:
+            self._attr_unique_id += ".accumulated"
+
+        self._accumulated_value: float | None = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        assert (
+            self._accumulated_value is not None
+        ), "async_added_to_hass must have been called first"
+        self._accumulated_value += float(self._sensor_data.getValue())
+
+        super()._handle_coordinator_update()
+
+    @property
+    def native_value(self) -> entity.StateType:
+        """Return the state of the sensor."""
         if self._accumulated_value is None:
             return None
         return round(self._accumulated_value, 1)
+
+    async def async_added_to_hass(self) -> None:
+        """Load the last known state value of the entity if the accumulated type."""
+        await super().async_added_to_hass()
+        state = await self.async_get_last_state()
+        self._accumulated_value = 0.0
+        if state:
+            try:
+                # Previous value could be `unknown` if the connection didn't originally
+                # complete.
+                self._accumulated_value = float(state.state)
+            except (ValueError) as err:
+                _LOGGER.warning("Could not restore last state: %s", err)
+            else:
+                if ATTR_LAST_UPDATE in state.attributes:
+                    last_run = dt.parse_datetime(state.attributes[ATTR_LAST_UPDATE])
+                    if last_run is not None:
+                        self.coordinator.update_last_run(last_run)
+        # Force a second update from the iotawatt to ensure that sensors are up to date.
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def name(self) -> str | None:
+        """Return name of the entity."""
+        return f"{self._sensor_data.getSourceName()} Accumulated"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Return the extra state attributes of the entity."""
+        attrs = super().extra_state_attributes
+
+        assert (
+            self.coordinator.api is not None
+            and self.coordinator.api.getLastUpdateTime() is not None
+        )
+        attrs[ATTR_LAST_UPDATE] = self.coordinator.api.getLastUpdateTime().isoformat()
+
+        return attrs
