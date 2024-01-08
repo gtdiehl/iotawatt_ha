@@ -255,6 +255,7 @@ class IotaWattAccumulatingSensor(IotaWattSensor, RestoreEntity):
             self._accumulated_value is not None
         ), "async_added_to_hass must have been called first"
         self._accumulated_value += float(self._sensor_data.getValue())
+        
         super()._handle_coordinator_update()
 
     @property
